@@ -1,0 +1,62 @@
+# Node.js with Angular
+# Build a Node.js project that uses Angular.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: NodeTool@0
+  inputs:
+    versionSpec: '12.x'
+  displayName: 'Install Node.js'
+
+# - script: |
+#     npm install -g @angular/cli
+#     npm install
+#     node version.ts
+#     ng build --optimization --progress
+#   displayName: 'node version and build'
+
+# # - task: CopyFiles@2
+# #   inputs:
+# #     contents: '$(System.DefaultWorkingDirectory/dist)'
+# #     targetFolder: '$(Build.ArtifactStagingDirectory)'
+
+# - task: S3Upload@1
+#   inputs:
+#     awsCredentials: 'AWS'
+#     regionName: 'us-east-2'
+#     bucketName: 'rvezy-static-assets-us-east-2'
+#     sourceFolder: '$(System.DefaultWorkingDirectory)/dist'
+#     createBucket: true
+#   displayName: 'Upload artifcats to S3'
+
+- script: |
+    echo $(Build.BuildId) $(build.repository.name) $(Build.DefinitionName)
+    docker build -t $(Build.DefinitionName):latest -t $(Build.DefinitionName):$(Build.BuildId) .
+  displayName: 'Build the Docker image'
+
+
+- task: ECRPushImage@1
+  inputs:
+    awsCredentials: 'AWS'
+    regionName: 'us-east-2'
+    imageSource: 'imagename'
+    sourceImageName: $(Build.DefinitionName)
+    repositoryName: $(Build.DefinitionName)
+    autoCreateRepository: true
+  displayName: 'Push image to ECR'
+
+- task: AWSCLI@1
+  inputs:
+    awsCredentials: 'AWS'
+    regionName: 'us-east-2'
+    awsCommand: 'ecs'
+    awsSubCommand: 'update-service'
+    awsArguments: '--cluster rvezy-production-cluster  --service rvezy-operation-dashboard-service --force-new-deployment'
+  displayName: 'Deploy ECS service'
